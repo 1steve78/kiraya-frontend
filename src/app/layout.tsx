@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Kiraya - Hyperlocal Delivery",
-  description: "Fast, reliable hyperlocal delivery platform.",
+  title: "HyperLocal - Fast Hyperlocal Delivery",
+  description: "Order groceries, medicines, bakery items and essentials with fast delivery from local neighborhood shops.",
 };
 
 export default function RootLayout({
@@ -19,8 +19,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans bg-surface text-on-surface">
+    <html lang="en" className={`${inter.variable} light h-full antialiased`}>
+      <body className="min-h-full flex flex-col bg-background text-on-background font-sans antialiased">
         {children}
       </body>
     </html>
