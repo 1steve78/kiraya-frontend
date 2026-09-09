@@ -9,6 +9,24 @@ function getAuthHeader(): Record<string, string> {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+    try {
+      const errorJson = await response.json();
+      if (errorJson?.message) {
+        errorMessage = errorJson.message;
+      } else if (errorJson?.error) {
+        errorMessage = errorJson.error;
+      }
+    } catch {
+      // Body was not json, keep status text
+    }
+    throw new Error(errorMessage);
+  }
+  return response.json();
+}
+
 export const apiClient = {
   async get<T>(endpoint: string): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -18,14 +36,42 @@ export const apiClient = {
         ...getAuthHeader(),
       },
     });
-
-    if (!response.ok) {
-      // In a real app, you might want a custom ApiError class here
-      throw new Error(`API Error: ${response.status} ${response.statusText}`);
-    }
-
-    return response.json();
+    return handleResponse<T>(response);
   },
 
-  // You can add post, put, patch, delete here later using the same pattern
+  async put<T>(endpoint: string, body?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return handleResponse<T>(response);
+  },
+
+  async post<T>(endpoint: string, body?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return handleResponse<T>(response);
+  },
+
+  async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAuthHeader(),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    return handleResponse<T>(response);
+  },
 };

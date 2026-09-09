@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   MapPin,
   ChevronDown,
@@ -140,11 +141,33 @@ const PRODUCTS: Product[] = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [favorites, setFavorites] = useState<Record<string, boolean>>({});
   const [cartQuantities, setCartQuantities] = useState<Record<string, number>>({});
   const [activeTab, setActiveTab] = useState<"home" | "search" | "orders" | "account">("home");
+
+  // Auth state — read from localStorage
+  const [authUser, setAuthUser] = useState<{ name: string; role: string; shopId?: number } | null>(null);
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem('token');
+      const raw = localStorage.getItem('kiraya_auth_user');
+      if (token && raw) setAuthUser(JSON.parse(raw));
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('kiraya_auth_user');
+    setAuthUser(null);
+    router.refresh();
+  }, [router]);
+
+  const isShopOwner = authUser?.role === 'SHOP_OWNER' || authUser?.role === 'SHOP_STAFF';
+  const isDelivery  = authUser?.role === 'DELIVERY_PARTNER';
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -177,48 +200,53 @@ export default function HomePage() {
         </div>
 
         <nav className="flex items-center gap-2">
-          <Link
-            href="/"
-            className="text-[#006e2f] bg-emerald-50 px-4 py-2 rounded-full text-sm font-semibold transition-colors"
-          >
+          <Link href="/" className="text-[#006e2f] bg-emerald-50 px-4 py-2 rounded-full text-sm font-semibold transition-colors">
             Marketplace
           </Link>
-          <Link
-            href="/orders/101"
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-full text-sm font-medium transition-colors"
-          >
-            Orders
-          </Link>
-          <a
-            href="#support"
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-full text-sm font-medium transition-colors"
-          >
-            Support
-          </a>
+          {/* Role-specific nav links */}
+          {isShopOwner && (
+            <Link href="/shop/dashboard" className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5">
+              <Store className="w-4 h-4" /> Shop Dashboard
+            </Link>
+          )}
+          {isDelivery && (
+            <Link href="/delivery/dashboard" className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5">
+              <ShoppingBag className="w-4 h-4" /> My Deliveries
+            </Link>
+          )}
+          {authUser && !isShopOwner && !isDelivery && (
+            <Link href="/orders/101" className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-4 py-2 rounded-full text-sm font-medium transition-colors">
+              My Orders
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
-          <button
-            aria-label="Search"
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-full transition-colors active:scale-95"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-          <button
-            aria-label="Notifications"
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-full transition-colors active:scale-95"
-          >
-            <Bell className="w-5 h-5" />
-          </button>
-          <button
-            aria-label="Settings"
-            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-2 rounded-full transition-colors active:scale-95"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button className="bg-[#006e2f] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-emerald-800 transition-all active:scale-95 shadow-xs ml-2">
-            Profile
-          </button>
+          {authUser ? (
+            <>
+              <span className="text-sm font-semibold text-slate-700 px-2">
+                👋 {authUser.name.split(' ')[0]}
+              </span>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-[#004b1e] border border-emerald-200 uppercase tracking-wider">
+                {authUser.role.replace('_', ' ')}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="ml-2 text-sm font-semibold text-slate-600 hover:text-red-600 hover:bg-red-50 px-4 py-2 rounded-full border border-slate-200 hover:border-red-200 active:scale-95 transition-all"
+              >
+                Sign out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" className="text-sm font-semibold text-slate-700 hover:bg-slate-100 px-4 py-2 rounded-full border border-slate-200 active:scale-95 transition-all">
+                Sign in
+              </Link>
+              <Link href="/register" className="bg-[#006e2f] text-white px-5 py-2 rounded-full text-sm font-semibold hover:bg-emerald-800 transition-all active:scale-95 shadow-xs ml-1">
+                Get started
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -231,13 +259,22 @@ export default function HomePage() {
             <ChevronDown className="w-4 h-4 text-slate-500" />
           </div>
         </div>
-        <button
-          aria-label="Account"
-          className="bg-slate-100 p-2 rounded-full text-slate-700 hover:bg-slate-200 transition-colors"
-        >
-          <User className="w-5 h-5" />
-        </button>
+        {authUser ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#004b1e] bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full uppercase">
+              {authUser.role.split('_')[0]}
+            </span>
+            <button onClick={handleLogout} className="bg-slate-100 p-2 rounded-full text-slate-700 hover:bg-red-100 hover:text-red-600 transition-colors">
+              <User className="w-5 h-5" />
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" className="bg-[#006e2f] text-white text-xs font-bold px-4 py-2 rounded-full hover:bg-emerald-800 transition-colors">
+            Sign in
+          </Link>
+        )}
       </div>
+
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 lg:px-16 py-6 space-y-8">
@@ -557,17 +594,28 @@ export default function HomePage() {
           <span className="text-[11px] mt-0.5">Orders</span>
         </Link>
 
-        <button
-          onClick={() => setActiveTab("account")}
-          className={`flex flex-col items-center justify-center rounded-full px-4 py-1.5 transition-all ${
-            activeTab === "account"
-              ? "bg-[#22c55e] text-[#004b1e] font-bold"
-              : "text-slate-500 hover:bg-slate-100"
-          }`}
-        >
-          <User className="w-5 h-5" />
-          <span className="text-[11px] mt-0.5">Account</span>
-        </button>
+        {authUser ? (
+          <button
+            onClick={handleLogout}
+            className={`flex flex-col items-center justify-center rounded-full px-4 py-1.5 transition-all text-red-500 hover:bg-red-50`}
+          >
+            <User className="w-5 h-5" />
+            <span className="text-[11px] mt-0.5">Sign out</span>
+          </button>
+        ) : (
+          <Link
+            href="/login"
+            onClick={() => setActiveTab("account")}
+            className={`flex flex-col items-center justify-center rounded-full px-4 py-1.5 transition-all ${
+              activeTab === "account"
+                ? "bg-[#22c55e] text-[#004b1e] font-bold"
+                : "text-slate-500 hover:bg-slate-100"
+            }`}
+          >
+            <User className="w-5 h-5" />
+            <span className="text-[11px] mt-0.5">Sign in</span>
+          </Link>
+        )}
       </nav>
     </div>
   );

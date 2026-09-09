@@ -21,6 +21,8 @@ export interface Order {
   shopId: number;
   shopName: string;
   customerId: number;
+  customerName?: string;
+  customerPhone?: string;
   status: OrderStatus;
   totalAmount: number;
   items: OrderItem[];

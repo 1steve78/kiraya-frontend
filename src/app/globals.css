@@ -68,16 +68,6 @@
   --font-label-md: var(--font-inter), "Inter", sans-serif;
   --font-label-sm: var(--font-inter), "Inter", sans-serif;
 
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 16px;
-  --spacing-lg: 24px;
-  --spacing-xl: 32px;
-  --spacing-gutter: 16px;
-  --spacing-margin-mobile: 16px;
-  --spacing-margin-desktop: 64px;
-  --spacing-unit: 4px;
-
   --radius-sm: 0.25rem;
   --radius-DEFAULT: 0.5rem;
   --radius-md: 0.75rem;
@@ -92,6 +82,16 @@
 :root {
   --background: #f8f9ff;
   --foreground: #0b1c30;
+
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --spacing-gutter: 16px;
+  --spacing-margin-mobile: 16px;
+  --spacing-margin-desktop: 64px;
+  --spacing-unit: 4px;
 }
 
 body {

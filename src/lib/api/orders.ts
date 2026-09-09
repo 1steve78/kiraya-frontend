@@ -1,16 +1,27 @@
 // lib/api/orders.ts
 import { apiClient } from './client';
-import { Order } from '@/types/order';
+import { Order, OrderStatus } from '@/types/order';
 
 export const ordersApi = {
   /**
    * Fetches the current snapshot of an order by ID.
    */
   async getOrder(orderId: string | number): Promise<Order> {
-    return apiClient.get<Order>(`/api/orders/${orderId}`);
+    return apiClient.get<Order>(`/orders/${orderId}`);
   },
-  
-  // Later you can add:
-  // async getMyOrders(): Promise<Order[]> { ... }
-  // async cancelOrder(orderId: number): Promise<void> { ... }
+
+  /**
+   * Fetches all orders for the current authenticated customer.
+   */
+  async getMyOrders(): Promise<Order[]> {
+    return apiClient.get<Order[]>(`/orders`);
+  },
+
+  /**
+   * Updates the status of an order (PATCH — backend only accepts PATCH).
+   * Body uses { status } which maps to the backend's renamed field.
+   */
+  async updateOrderStatus(orderId: number, status: OrderStatus): Promise<Order> {
+    return apiClient.patch<Order>(`/orders/${orderId}/status`, { status });
+  },
 };
