@@ -1,53 +1,41 @@
-// components/orders/OrderTimeline.tsx
+// components/delivery/DeliveryTimeline.tsx
 import React from 'react';
 import { OrderStatus } from '@/types/order';
 import { Check, X, Truck } from 'lucide-react';
 
-interface OrderTimelineProps {
-  currentStatus: OrderStatus;
-  updatedAt?: string;
+interface DeliveryTimelineProps {
+  currentStatus: OrderStatus | string;
 }
 
-const NORMAL_STEPS: OrderStatus[] = [
-  'PENDING',
-  'CONFIRMED',
-  'PREPARING',
-  'READY_FOR_PICKUP',
+const DELIVERY_STEPS: string[] = [
+  'ASSIGNED',
+  'ACCEPTED',
   'PICKED_UP',
   'OUT_FOR_DELIVERY',
   'DELIVERED',
 ];
 
-const STATUS_DETAILS: Record<OrderStatus, { label: string; subtext: string }> = {
-  PENDING: { label: 'Order Placed', subtext: 'Order received by server' },
-  CONFIRMED: { label: 'Shop Accepted', subtext: 'Merchant confirmed order' },
-  PREPARING: { label: 'Preparing', subtext: 'Packing your items' },
-  READY_FOR_PICKUP: { label: 'Ready for Pickup', subtext: 'Waiting for driver' },
-  PICKED_UP: { label: 'Picked Up', subtext: 'Delivery partner has picked up your order' },
-  OUT_FOR_DELIVERY: { label: 'Out for Delivery', subtext: 'Your order is on the way' },
-  DELIVERED: { label: 'Delivered', subtext: 'Order completed' },
-  CANCELLED: { label: 'Cancelled', subtext: 'Order was cancelled' },
-  ASSIGNED: { label: 'Assigned', subtext: 'Delivery partner assigned' },
-  ACCEPTED: { label: 'Driver Accepted', subtext: 'Driver is arriving at shop' }
+const STATUS_DETAILS: Record<string, { label: string; subtext: string }> = {
+  ASSIGNED: { label: 'Assigned', subtext: 'Ready for you to accept' },
+  ACCEPTED: { label: 'Accepted', subtext: 'Head to the shop for pickup' },
+  PICKED_UP: { label: 'Picked Up', subtext: 'Delivery partner has picked up order' },
+  OUT_FOR_DELIVERY: { label: 'Out for Delivery', subtext: 'Deliver order to the customer' },
+  DELIVERED: { label: 'Delivered', subtext: 'Job completed' },
+  CANCELLED: { label: 'Cancelled', subtext: 'Delivery was cancelled' },
 };
 
-export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
+export function DeliveryTimeline({ currentStatus }: DeliveryTimelineProps) {
   const isCancelled = currentStatus === 'CANCELLED';
 
   const stepsToShow = isCancelled
-    ? (['PENDING', 'CONFIRMED', 'CANCELLED'] as OrderStatus[])
-    : NORMAL_STEPS;
+    ? (['ASSIGNED', 'CANCELLED'])
+    : DELIVERY_STEPS;
 
-  // Map internal driver states so the UI doesn't break
-  const effectiveStatus = (currentStatus === 'ASSIGNED' || currentStatus === 'ACCEPTED') 
-    ? 'READY_FOR_PICKUP' 
-    : currentStatus;
-
-  const currentIndex = NORMAL_STEPS.indexOf(effectiveStatus);
+  const currentIndex = DELIVERY_STEPS.indexOf(currentStatus as string);
   const progressPercent = isCancelled
     ? 100
     : currentIndex >= 0
-    ? Math.min(100, Math.round(((currentIndex + 0.5) / (NORMAL_STEPS.length - 1)) * 100))
+    ? Math.min(100, Math.round(((currentIndex + 0.5) / (DELIVERY_STEPS.length - 1)) * 100))
     : 0;
 
   return (
@@ -56,7 +44,7 @@ export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
         <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-[#006e2f]">
           <Truck className="w-4 h-4 text-[#006e2f]" />
         </div>
-        <span>Live Status</span>
+        <span>Delivery Progress</span>
       </h2>
 
       <div className="relative pl-6">
@@ -111,10 +99,10 @@ export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
                   {isCurrentActive ? (
                     <div className="bg-emerald-50 px-3.5 py-2 rounded-xl border border-emerald-200/60 -mt-1 shadow-xs inline-block w-full">
                       <p className="text-sm font-bold text-[#006e2f]">
-                        {STATUS_DETAILS[currentStatus]?.label || STATUS_DETAILS[step]?.label || step}
+                        {STATUS_DETAILS[currentStatus as string]?.label || STATUS_DETAILS[step]?.label || step}
                       </p>
                       <p className="text-xs font-medium text-emerald-700/80 mt-0.5">
-                        {STATUS_DETAILS[currentStatus]?.subtext || STATUS_DETAILS[step]?.subtext || 'In progress'}
+                        {STATUS_DETAILS[currentStatus as string]?.subtext || STATUS_DETAILS[step]?.subtext || 'In progress'}
                       </p>
                     </div>
                   ) : state === 'current' && isCancelled ? (
@@ -123,7 +111,7 @@ export function OrderTimeline({ currentStatus }: OrderTimelineProps) {
                         {STATUS_DETAILS[step]?.label || step}
                       </p>
                       <p className="text-xs font-medium text-red-600/80 mt-0.5">
-                        {STATUS_DETAILS[step]?.subtext || 'Order was cancelled'}
+                        {STATUS_DETAILS[step]?.subtext || 'Delivery was cancelled'}
                       </p>
                     </div>
                   ) : (

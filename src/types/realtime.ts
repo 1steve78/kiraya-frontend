@@ -47,15 +47,25 @@ export interface OrderCancelledEvent extends RealtimeEvent {
   };
 }
 
+export interface DeliveryStatusChangedEvent extends RealtimeEvent {
+  type: 'DELIVERY_STATUS_CHANGED';
+  data: {
+    orderId: number;
+    status: OrderStatus;
+  };
+}
+
 export type RealtimeEventType =
   | 'NEW_ORDER'
   | 'ORDER_STATUS_CHANGED'
   | 'ORDER_ASSIGNED'
-  | 'ORDER_CANCELLED';
+  | 'ORDER_CANCELLED'
+  | 'DELIVERY_STATUS_CHANGED';
 
 // Discriminated union of all real-time events in the platform
 export type ShopRealtimeEvent =
   | NewOrderEvent
   | OrderStatusChangedEvent
   | OrderAssignedEvent
-  | OrderCancelledEvent;
+  | OrderCancelledEvent
+  | DeliveryStatusChangedEvent;

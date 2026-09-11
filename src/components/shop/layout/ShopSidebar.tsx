@@ -15,37 +15,80 @@ const navItems = [
 export function ShopSidebar() {
   const pathname = usePathname();
 
+  // Mock shop details for the sidebar, in a real app this would come from a context/hook
+  const shopName = "Fresh Mart";
+  const shopInitials = "FM";
+
   return (
-    <div className="w-64 bg-white border-r border-slate-200/80 h-[calc(100vh-4rem)] sticky top-16 flex flex-col hidden md:flex shrink-0">
-      <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/shop/dashboard');
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-                isActive
-                  ? 'bg-[#006e2f] text-white shadow-md'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-              }`}
-            >
-              <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-              {item.name}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="p-4 border-t border-slate-200/80">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col justify-between hidden md:flex shrink-0 h-screen">
+      <div>
+        <div className="p-4 flex items-center gap-3 border-b border-gray-100">
+          <div className="w-10 h-10 bg-[#006e2f] rounded flex items-center justify-center text-white font-bold">
+            HL
+          </div>
+          <div>
+            <h1 className="font-bold text-lg text-[#006e2f] leading-tight">HyperLocal</h1>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Merchant Portal</p>
+          </div>
+        </div>
+
+        <div className="p-4">
+          <div className="bg-[#f0f4f8] rounded-xl p-3 flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-[#006e2f] rounded-full flex items-center justify-center text-white font-bold shadow-sm">
+              {shopInitials}
+            </div>
+            <div>
+              <p className="font-bold text-sm">{shopName}</p>
+              <p className="text-xs text-slate-500 flex items-center gap-1">
+                <span className="text-amber-500">★</span> 4.8 • Active
+              </p>
+            </div>
+          </div>
+
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const isActive = pathname === item.href || (pathname.startsWith(item.href) && item.href !== '/shop/dashboard');
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-[#eef2ff] text-blue-700'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-700 opacity-100' : 'text-slate-500 opacity-70'}`} />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
+      <div className="p-4 border-t border-gray-100">
         <Link
           href="/shop/dashboard/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors mb-2"
         >
-          <Settings className="w-5 h-5 text-slate-400" />
+          <Settings className="w-5 h-5 text-slate-500 opacity-70" />
           Settings
         </Link>
+        <button
+          onClick={() => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+          }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors text-left"
+        >
+          <svg className="w-5 h-5 text-red-500 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+          Log Out
+        </button>
       </div>
-    </div>
+    </aside>
   );
 }

@@ -36,7 +36,7 @@ export function useOrderUpdates(orderId: number | string, onReconnect: () => voi
       const handleMessage = (body: string) => {
         try {
           const event: ShopRealtimeEvent = JSON.parse(body);
-          if (event.type === 'ORDER_STATUS_CHANGED') {
+          if (event.type === 'ORDER_STATUS_CHANGED' || event.type === 'DELIVERY_STATUS_CHANGED') {
             setLiveStatus(event.data.status);
             setLastUpdated(new Date());
           }

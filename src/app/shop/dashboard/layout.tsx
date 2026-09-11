@@ -12,23 +12,16 @@ export default function ShopDashboardLayout({ children }: { children: React.Reac
 
   return (
     <AuthGuard allowedRoles={['SHOP_OWNER', 'SHOP_STAFF', 'ADMIN']}>
-      <div className="bg-[#f8f9ff] text-[#0b1c30] min-h-screen font-sans antialiased">
-        {/* Top Header */}
-        <header className="bg-white border-b border-slate-200/80 sticky top-0 z-30 shadow-xs">
-          <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-center text-[#006e2f] shadow-xs">
-                <Store className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-1.5">
-                    <span>🏪 Fresh Mart</span>
-                  </h1>
-                  <span className="bg-emerald-100 text-[#004b1e] text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    Open
-                  </span>
-                </div>
+      <div className="min-h-screen bg-[#f8f9fa] flex text-slate-800 font-sans antialiased">
+        <ShopSidebar />
+        
+        <main className="flex-1 flex flex-col h-screen overflow-hidden">
+          {/* Top Header */}
+          <header className="bg-white h-16 border-b border-gray-200 flex items-center justify-between px-6 shrink-0 z-30">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-full px-4 py-1.5 text-sm font-medium">
+                <span className="text-slate-400">📍</span>
+                Main Store
               </div>
             </div>
 
@@ -38,22 +31,19 @@ export default function ShopDashboardLayout({ children }: { children: React.Reac
                 <span className="text-slate-400 font-medium">Role:</span>
                 <button
                   onClick={() => switchRole(user.role === 'SHOP_OWNER' ? 'CUSTOMER' : 'SHOP_OWNER', 1)}
-                  className="font-bold text-slate-700 hover:text-[#006e2f] transition-colors underline"
+                  className="font-bold text-slate-700 hover:text-emerald-600 transition-colors underline"
                   title="Click to toggle test role"
                 >
                   {user.role}
                 </button>
               </div>
             </div>
-          </div>
-        </header>
+          </header>
 
-        <div className="max-w-[1600px] mx-auto flex">
-          <ShopSidebar />
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
+          <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 min-w-0">
             {children}
-          </main>
-        </div>
+          </div>
+        </main>
       </div>
     </AuthGuard>
   );
