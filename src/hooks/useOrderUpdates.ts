@@ -1,13 +1,14 @@
 // hooks/useOrderUpdates.ts
 import { useEffect, useState, useRef } from 'react';
-import { createStompClient } from '@/lib/websocket/stompClient';
+import { useWebSocket } from '@/lib/websocket/WebSocketContext';
+import { triggerNotification } from '@/hooks/useNotifications';
 import { OrderStatus } from '@/types/order';
 import { ShopRealtimeEvent } from '@/types/realtime';
 
 export type ConnectionState = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
 
 export function useOrderUpdates(orderId: number | string, onReconnect: () => void) {
-  const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
+  const { client, connectionState } = useWebSocket();
   const [liveStatus, setLiveStatus] = useState<OrderStatus | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
@@ -20,54 +21,52 @@ export function useOrderUpdates(orderId: number | string, onReconnect: () => voi
     onReconnectRef.current = onReconnect;
   }, [onReconnect]);
 
+  // Handle reconnect trigger based on connectionState changes
   useEffect(() => {
-    const client = createStompClient();
-
-    client.onConnect = () => {
-      // If we previously connected and are connecting again, it's a reconnection
+    if (connectionState === 'CONNECTED') {
       if (hasConnectedOnce.current) {
-        setConnectionState('RECONNECTING');
-        onReconnectRef.current(); // Trigger REST resync
+        onReconnectRef.current();
       }
-
-      setConnectionState('CONNECTED');
       hasConnectedOnce.current = true;
+    }
+  }, [connectionState]);
 
-      const handleMessage = (body: string) => {
-        try {
-          const event: ShopRealtimeEvent = JSON.parse(body);
-          if (event.type === 'ORDER_STATUS_CHANGED' || event.type === 'DELIVERY_STATUS_CHANGED') {
-            setLiveStatus(event.data.status);
-            setLastUpdated(new Date());
-          }
-        } catch {
-          // Non-JSON or unrecognized message — ignore
+  useEffect(() => {
+    if (!client || connectionState !== 'CONNECTED') return;
+
+    const handleMessage = (body: string) => {
+      try {
+        const event: ShopRealtimeEvent = JSON.parse(body);
+        if (event.type === 'ORDER_STATUS_CHANGED') {
+          setLiveStatus(event.data.status as OrderStatus); // Assuming status is what's passed
+          setLastUpdated(new Date());
+          triggerNotification({
+            type: 'info',
+            title: 'Order Status Update',
+            message: `Your order is now ${event.data.status}.`,
+          });
         }
-      };
-
-      // Subscribe to broadcast topic (works without authentication)
-      client.subscribe(`/topic/orders/${orderId}`, (message) => {
-        handleMessage(message.body);
-      });
-
-      // Subscribe to user-specific queue (requires authenticated STOMP connection)
-      client.subscribe(`/user/queue/orders`, (message) => {
-        handleMessage(message.body);
-      });
+      } catch {
+        // Non-JSON or unrecognized message — ignore
+      }
     };
 
-    client.onWebSocketError = () => setConnectionState('DISCONNECTED');
-    client.onWebSocketClose = () => setConnectionState('DISCONNECTED');
-    client.onStompError = () => setConnectionState('DISCONNECTED');
+    // Subscribe to broadcast topic (works without authentication)
+    const topicSub = client.subscribe(`/topic/orders/${orderId}`, (message) => {
+      handleMessage(message.body);
+    });
 
-    // Start the connection
-    client.activate();
+    // Subscribe to user-specific queue (requires authenticated STOMP connection)
+    const queueSub = client.subscribe(`/user/queue/orders`, (message) => {
+      handleMessage(message.body);
+    });
 
     // Cleanup when component unmounts
     return () => {
-      client.deactivate();
+      topicSub.unsubscribe();
+      queueSub.unsubscribe();
     };
-  }, [orderId]);
+  }, [client, connectionState, orderId]);
 
   return { connectionState, liveStatus, lastUpdated };
 }

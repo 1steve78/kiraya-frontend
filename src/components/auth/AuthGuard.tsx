@@ -39,8 +39,8 @@ export function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
 
       if (allowedRoles && allowedRoles.length > 0) {
         if (!allowedRoles.includes(decodedToken.role)) {
-          // Logged in but wrong role — go home
-          router.replace('/');
+          // Logged in but wrong role — go to forbidden page
+          router.replace('/forbidden');
           return;
         }
       }

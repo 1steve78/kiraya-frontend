@@ -9,9 +9,18 @@ function getAuthHeader(): Record<string, string> {
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 }
 
+export class ApiError extends Error {
+  constructor(public status: number, message: string, public code?: string) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let errorMessage = `API Error: ${response.status} ${response.statusText}`;
+    let errorCode;
+    
     try {
       const errorJson = await response.json();
       if (errorJson?.message) {
@@ -19,10 +28,42 @@ async function handleResponse<T>(response: Response): Promise<T> {
       } else if (errorJson?.error) {
         errorMessage = errorJson.error;
       }
+      errorCode = errorJson?.code;
     } catch {
       // Body was not json, keep status text
     }
-    throw new Error(errorMessage);
+
+    const apiError = new ApiError(response.status, errorMessage, errorCode);
+
+    // Global Error Interceptor Logic
+    if (typeof window !== 'undefined') {
+      switch (response.status) {
+        case 401:
+          console.warn('[API] 401 Unauthorized - Clearing session and redirecting to login');
+          localStorage.removeItem('token');
+          window.location.href = '/login?expired=true';
+          break;
+        case 403:
+          console.warn('[API] 403 Forbidden - Redirecting to forbidden page');
+          window.location.href = '/forbidden';
+          break;
+        case 409:
+        case 422:
+        case 500:
+          console.warn(`[API] ${response.status} Error - Dispatching global toast event`, errorMessage);
+          window.dispatchEvent(new CustomEvent('global-toast', {
+            detail: { type: 'error', message: errorMessage, status: response.status }
+          }));
+          break;
+        default:
+          window.dispatchEvent(new CustomEvent('global-toast', {
+            detail: { type: 'error', message: errorMessage, status: response.status }
+          }));
+          break;
+      }
+    }
+
+    throw apiError;
   }
   return response.json();
 }

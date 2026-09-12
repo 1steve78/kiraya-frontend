@@ -1,11 +1,11 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Store, Loader2, AlertCircle, MapPin, Phone, CheckCircle2 } from 'lucide-react';
 import { createShopApi } from '@/lib/api/shop-setup';
-import { AuthGuard } from '@/components/AuthGuard';
+import { AuthGuard } from '@/components/auth/AuthGuard';
 
 function CreateShopForm() {
   const router = useRouter();

@@ -8,6 +8,8 @@ import { getAvailableDeliveries, getMyDeliveries, acceptDelivery, markPickedUp, 
 import { useDeliveryUpdates } from '@/hooks/useDeliveryUpdates';
 import { DeliveryCard } from '@/components/delivery/DeliveryCard';
 import { DeliveryDetails } from '@/components/delivery/DeliveryDetails';
+import { Loading } from '@/components/common/Loading';
+import { EmptyState } from '@/components/common/EmptyState';
 
 // Mock fallback data just in case API fails or is empty initially
 const FALLBACK_AVAILABLE: Delivery[] = [
@@ -326,11 +328,15 @@ export default function DeliveryDashboardPage() {
               )}
 
               {isLoading ? (
-                <div className="p-8 text-center text-slate-400">Loading deliveries...</div>
-              ) : availableDeliveries.length === 0 ? (
-                <div className="p-8 text-center bg-white rounded-2xl border border-slate-100 text-slate-500">
-                  No available deliveries near you right now.
+                <div className="py-12">
+                  <Loading text="Finding deliveries near you..." />
                 </div>
+              ) : availableDeliveries.length === 0 ? (
+                <EmptyState 
+                  title="No deliveries nearby."
+                  description="We'll notify you when one becomes available."
+                  icon={<Truck className="w-6 h-6" />}
+                />
               ) : (
                 <div className="space-y-4">
                   {availableDeliveries.map(delivery => (
@@ -360,11 +366,11 @@ export default function DeliveryDashboardPage() {
                   />
                 </div>
               ) : (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-8 text-center text-slate-500 flex flex-col items-center">
-                  <span className="text-4xl mb-4 opacity-30">🚚</span>
-                  <p>You have no active deliveries.</p>
-                  <p className="text-xs mt-2">Accept an available delivery to start.</p>
-                </div>
+                <EmptyState 
+                  title="No active deliveries"
+                  description="Accept an available delivery to start."
+                  icon={<MapPin className="w-6 h-6" />}
+                />
               )}
 
             </div>

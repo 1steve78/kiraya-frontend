@@ -1,6 +1,7 @@
 // hooks/useShopOrderUpdates.ts
 import { useEffect, useState, useRef } from 'react';
-import { createStompClient } from '@/lib/websocket/stompClient';
+import { useWebSocket } from '@/lib/websocket/WebSocketContext';
+import { triggerNotification } from '@/hooks/useNotifications';
 import {
   ShopRealtimeEvent,
   NewOrderEvent,
@@ -23,11 +24,9 @@ export function useShopOrderUpdates(
   shopId: number | string = 1,
   options?: UseShopOrderUpdatesOptions
 ) {
-  const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
+  const { client, connectionState } = useWebSocket();
   const [lastEvent, setLastEvent] = useState<ShopRealtimeEvent | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-
-  const hasConnectedOnce = useRef(false);
 
   // Store options in stable ref to avoid unnecessary subscription resets
   const optionsRef = useRef(options);
@@ -36,73 +35,73 @@ export function useShopOrderUpdates(
   }, [options]);
 
   useEffect(() => {
-    const client = createStompClient();
+    if (!client || connectionState !== 'CONNECTED') return;
 
-    client.onConnect = () => {
-      if (hasConnectedOnce.current) {
-        setConnectionState('RECONNECTING');
-        optionsRef.current?.onReconnect?.();
-      }
+    const handleIncomingMessage = (messageBody: string) => {
+      try {
+        const event: ShopRealtimeEvent = JSON.parse(messageBody);
+        setLastEvent(event);
+        setLastUpdated(new Date());
 
-      setConnectionState('CONNECTED');
-      hasConnectedOnce.current = true;
+        optionsRef.current?.onEvent?.(event);
 
-      const handleIncomingMessage = (messageBody: string) => {
-        try {
-          const event: ShopRealtimeEvent = JSON.parse(messageBody);
-          setLastEvent(event);
-          setLastUpdated(new Date());
-
-          optionsRef.current?.onEvent?.(event);
-
-          switch (event.type) {
-            case 'NEW_ORDER':
-              optionsRef.current?.onNewOrder?.(event);
-              break;
-            case 'ORDER_STATUS_CHANGED':
-              optionsRef.current?.onStatusChanged?.(event);
-              break;
-            case 'ORDER_CANCELLED':
-              optionsRef.current?.onOrderCancelled?.(event);
-              break;
-            case 'ORDER_ASSIGNED':
-              optionsRef.current?.onOrderAssigned?.(event);
-              break;
-            default:
-              break;
-          }
-        } catch {
-          // Non-JSON or unrecognized format
+        switch (event.type) {
+          case 'NEW_ORDER':
+            triggerNotification({
+              type: 'order',
+              title: '🎉 New Order Received',
+              message: `Order #${event.data.orderId} was just placed.`,
+            });
+            optionsRef.current?.onNewOrder?.(event);
+            break;
+          case 'ORDER_STATUS_CHANGED':
+            triggerNotification({
+              type: 'info',
+              title: 'Order Status Changed',
+              message: `Order #${event.data.orderId} is now ${event.data.status}.`,
+            });
+            optionsRef.current?.onStatusChanged?.(event);
+            break;
+          case 'ORDER_CANCELLED':
+            triggerNotification({
+              type: 'error',
+              title: 'Order Cancelled',
+              message: `Order #${event.data.orderId} has been cancelled.`,
+            });
+            optionsRef.current?.onOrderCancelled?.(event);
+            break;
+          case 'ORDER_ASSIGNED':
+            optionsRef.current?.onOrderAssigned?.(event);
+            break;
+          default:
+            break;
         }
-      };
-
-      // Broadcast topic — backend publishes ORDER_STATUS_CHANGED, NEW_ORDER, ORDER_CANCELLED here
-      client.subscribe(`/topic/shops/${shopId}`, (message) => {
-        handleIncomingMessage(message.body);
-      });
-
-      // Shop orders sub-topic — also receives the same events
-      client.subscribe(`/topic/shops/${shopId}/orders`, (message) => {
-        handleIncomingMessage(message.body);
-      });
-
-      // Authenticated user queue — backend sends to /user/{email}/queue/shop-orders
-      // Spring translates this to /user/queue/shop-orders for the connected user
-      client.subscribe(`/user/queue/shop-orders`, (message) => {
-        handleIncomingMessage(message.body);
-      });
+      } catch {
+        // Non-JSON or unrecognized format
+      }
     };
 
-    client.onWebSocketError = () => setConnectionState('DISCONNECTED');
-    client.onWebSocketClose = () => setConnectionState('DISCONNECTED');
-    client.onStompError = () => setConnectionState('DISCONNECTED');
+    // Broadcast topic — backend publishes ORDER_STATUS_CHANGED, NEW_ORDER, ORDER_CANCELLED here
+    const topicSub = client.subscribe(`/topic/shops/${shopId}`, (message) => {
+      handleIncomingMessage(message.body);
+    });
 
-    client.activate();
+    // Shop orders sub-topic — also receives the same events
+    const ordersSub = client.subscribe(`/topic/shops/${shopId}/orders`, (message) => {
+      handleIncomingMessage(message.body);
+    });
+
+    // Authenticated user queue — backend sends to /user/{email}/queue/shop-orders
+    const queueSub = client.subscribe(`/user/queue/shop-orders`, (message) => {
+      handleIncomingMessage(message.body);
+    });
 
     return () => {
-      client.deactivate();
+      topicSub.unsubscribe();
+      ordersSub.unsubscribe();
+      queueSub.unsubscribe();
     };
-  }, [shopId]);
+  }, [client, connectionState, shopId]);
 
   return { connectionState, lastEvent, lastUpdated };
 }

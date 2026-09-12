@@ -27,7 +27,8 @@ import { ShopOrderDetails } from '@/components/shop/ShopOrderDetails';
 import { RejectOrderDialog } from '@/components/shop/RejectOrderDialog';
 import { NewOrderToast, NewOrderNotificationData } from '@/components/shop/NewOrderToast';
 import { ShopOrderSkeleton } from '@/components/shop/ShopOrderSkeleton';
-import { AuthGuard } from '@/components/AuthGuard';
+import { AuthGuard } from '@/components/auth/AuthGuard';
+import { EmptyState } from '@/components/common/EmptyState';
 
 
 /**
@@ -548,15 +549,25 @@ function ShopDashboardContent() {
             </div>
 
             {/* 14 & 16. Shop Order Board */}
-            <ShopOrderBoard
-              orders={orders}
-              activeFilter={activeFilter}
-              onViewOrder={(order) => setSelectedOrder(order)}
-              onConfirm={handleConfirmOrder}
-              onStartPreparing={handleStartPreparing}
-              onMarkReady={handleMarkReady}
-              onReject={handleOpenRejectDialog}
-            />
+            {orders.length === 0 ? (
+              <div className="mt-8">
+                <EmptyState 
+                  title="No new orders 🎉"
+                  description="You're all caught up for now."
+                  icon={<Store className="w-6 h-6" />}
+                />
+              </div>
+            ) : (
+              <ShopOrderBoard
+                orders={orders}
+                activeFilter={activeFilter}
+                onViewOrder={(order) => setSelectedOrder(order)}
+                onConfirm={handleConfirmOrder}
+                onStartPreparing={handleStartPreparing}
+                onMarkReady={handleMarkReady}
+                onReject={handleOpenRejectDialog}
+              />
+            )}
           </>
         )}
       </main>
