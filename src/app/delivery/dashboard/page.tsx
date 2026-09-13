@@ -6,6 +6,7 @@ import { LayoutDashboard, Truck, MapPin, Settings } from 'lucide-react';
 import { Delivery } from '@/types/delivery';
 import { getAvailableDeliveries, getMyDeliveries, acceptDelivery, markPickedUp, markOutForDelivery, markDelivered } from '@/lib/api/delivery';
 import { useDeliveryUpdates } from '@/hooks/useDeliveryUpdates';
+import { useDeliveryPresence } from '@/hooks/useDeliveryPresence';
 import { DeliveryCard } from '@/components/delivery/DeliveryCard';
 import { DeliveryDetails } from '@/components/delivery/DeliveryDetails';
 import { Loading } from '@/components/common/Loading';
@@ -34,7 +35,12 @@ const FALLBACK_AVAILABLE: Delivery[] = [
 ];
 
 export default function DeliveryDashboardPage() {
-  const [isOnline, setIsOnline] = useState(true);
+  // Hooks for presence and updates
+  const { status: presenceStatus, isLoading: isPresenceLoading, goOnline, goOffline } = useDeliveryPresence();
+  const { lastEvent, connectionState } = useDeliveryUpdates();
+  
+  const isOnline = presenceStatus === 'ONLINE' || presenceStatus === 'BUSY';
+  
   const [partnerName, setPartnerName] = useState('Partner');
   const [partnerInitials, setPartnerInitials] = useState('HL');
   
@@ -42,9 +48,6 @@ export default function DeliveryDashboardPage() {
   const [activeDelivery, setActiveDelivery] = useState<Delivery | null>(null);
   const [completedDeliveries, setCompletedDeliveries] = useState<Delivery[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Hook for websocket updates
-  const { lastEvent, connectionState } = useDeliveryUpdates();
 
   useEffect(() => {
     if (!lastEvent) return;
@@ -278,13 +281,18 @@ export default function DeliveryDashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <div 
-              className={`flex items-center gap-2 border rounded-full px-4 py-1.5 text-sm font-bold cursor-pointer transition-colors ${isOnline ? 'bg-[#eefcf4] border-emerald-200 text-emerald-700' : 'bg-slate-100 border-slate-300 text-slate-600'}`}
-              onClick={() => setIsOnline(!isOnline)}
+            <button 
+              disabled={isPresenceLoading}
+              className={`flex items-center gap-2 border rounded-full px-4 py-1.5 text-sm font-bold transition-colors ${
+                isPresenceLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+              } ${
+                isOnline ? 'bg-[#eefcf4] border-emerald-200 text-emerald-700 hover:bg-emerald-50' : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+              }`}
+              onClick={() => isOnline ? goOffline() : goOnline()}
             >
               <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
               {isOnline ? 'Online' : 'Offline'}
-            </div>
+            </button>
           </div>
         </header>
 

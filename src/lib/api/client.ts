@@ -69,47 +69,55 @@ async function handleResponse<T>(response: Response): Promise<T> {
 }
 
 export const apiClient = {
-  async get<T>(endpoint: string): Promise<T> {
+  async get<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'GET',
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader(),
+        ...(options?.headers || {}),
       },
     });
     return handleResponse<T>(response);
   },
 
-  async put<T>(endpoint: string, body?: unknown): Promise<T> {
+  async put<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PUT',
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader(),
+        ...(options?.headers || {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(response);
   },
 
-  async post<T>(endpoint: string, body?: unknown): Promise<T> {
+  async post<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader(),
+        ...(options?.headers || {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     return handleResponse<T>(response);
   },
 
-  async patch<T>(endpoint: string, body?: unknown): Promise<T> {
+  async patch<T>(endpoint: string, body?: unknown, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'PATCH',
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...getAuthHeader(),
+        ...(options?.headers || {}),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
