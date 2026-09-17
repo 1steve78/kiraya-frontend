@@ -1,8 +1,8 @@
 // lib/websocket/stompClient.ts
 import { Client } from '@stomp/stompjs';
 
-export function createStompClient(): Client {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+export function createStompClient(customToken?: string): Client {
+  const token = customToken || (typeof window !== 'undefined' ? localStorage.getItem('token') : null);
   
   // Convert http://localhost:8080 to ws://localhost:8080/ws
   const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';

@@ -33,3 +33,17 @@ export const getMyPresence = async (partnerId: number): Promise<PartnerPresenceR
 export const getAvailablePartners = async (): Promise<PartnerPresenceResponse[]> => {
   return apiClient.get('/delivery-partners/available');
 };
+
+export interface NearbyPartnerResponse {
+  partnerId: number;
+  distanceKm: number;
+}
+
+export const getNearbyPartners = async (
+  latitude: number,
+  longitude: number,
+  radius: number
+): Promise<NearbyPartnerResponse[]> => {
+  return apiClient.get(`/delivery-partners/nearby?latitude=${latitude}&longitude=${longitude}&radius=${radius}`);
+};
+
