@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useWebSocket } from '@/lib/websocket/WebSocketContext';
-import { triggerNotification } from '@/hooks/useNotifications';
+import { useEffect, useState, useRef } from 'react';
+import { createStompClient } from '@/lib/websocket/stompClient';
 
 export interface DeliveryEvent {
   type: 'NEW_DELIVERY' | 'DELIVERY_ASSIGNED' | 'DELIVERY_STATUS_CHANGED' | 'DELIVERY_CANCELLED';
@@ -12,52 +11,55 @@ export interface DeliveryEvent {
   };
 }
 
+export type ConnectionState = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING';
+
 export function useDeliveryUpdates() {
-  const { client, connectionState } = useWebSocket();
+  const [connectionState, setConnectionState] = useState<ConnectionState>('CONNECTING');
   const [lastEvent, setLastEvent] = useState<DeliveryEvent | null>(null);
+  
+  const hasConnectedOnce = useRef(false);
 
   useEffect(() => {
-    if (!client || connectionState !== 'CONNECTED') return;
+    const client = createStompClient();
 
-    const handleMessage = (body: string) => {
-      try {
-        const event: DeliveryEvent = JSON.parse(body);
-        setLastEvent(event);
-        
-        // Trigger global notification dynamically
-        if (event.type === 'NEW_DELIVERY') {
-          triggerNotification({
-            type: 'delivery',
-            title: '🔔 New delivery available',
-            message: `Order #${event.data.orderId} is ready for pickup.`,
-          });
-        } else if (event.type === 'DELIVERY_STATUS_CHANGED') {
-          triggerNotification({
-            type: 'info',
-            title: 'Delivery Status Updated',
-            message: `Order #${event.data.orderId} is now ${event.data.status}.`,
-          });
-        }
-      } catch {
-        // ignore
+    client.onConnect = () => {
+      if (hasConnectedOnce.current) {
+        setConnectionState('RECONNECTING');
       }
+
+      setConnectionState('CONNECTED');
+      hasConnectedOnce.current = true;
+
+      const handleMessage = (body: string) => {
+        try {
+          const event: DeliveryEvent = JSON.parse(body);
+          setLastEvent(event);
+        } catch {
+          // ignore
+        }
+      };
+
+      // Listen to the generic pool
+      client.subscribe('/topic/deliveries/pool', (message) => {
+        handleMessage(message.body);
+      });
+
+      // Listen to personal queue
+      client.subscribe('/user/queue/delivery-orders', (message) => {
+        handleMessage(message.body);
+      });
     };
 
-    // Listen to the generic pool
-    const poolSub = client.subscribe('/topic/deliveries/pool', (message) => {
-      handleMessage(message.body);
-    });
+    client.onWebSocketError = () => setConnectionState('DISCONNECTED');
+    client.onWebSocketClose = () => setConnectionState('DISCONNECTED'); 
+    client.onStompError = () => setConnectionState('DISCONNECTED');
 
-    // Listen to personal queue
-    const userSub = client.subscribe('/user/queue/delivery-orders', (message) => {
-      handleMessage(message.body);
-    });
+    client.activate();
 
     return () => {
-      poolSub.unsubscribe();
-      userSub.unsubscribe();
+      client.deactivate();
     };
-  }, [client, connectionState]);
+  }, []);
 
   return {
     isConnected: connectionState === 'CONNECTED',

@@ -16,9 +16,12 @@ import {
   User,
   AlertCircle,
   RefreshCw,
+  MapPin,
+  Navigation,
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
 import { useOrderUpdates } from '@/hooks/useOrderUpdates';
+import { useDeliveryTracking } from '@/hooks/useDeliveryTracking';
 import { Order } from '@/types/order';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { OrderItems } from '@/components/orders/OrderItems';
@@ -76,14 +79,23 @@ export default function OrderTrackingPage() {
     };
   }, [orderId]);
 
-  // WebSocket Hook
+  // WebSocket Hook for Order Status
   const { connectionState, liveStatus, lastUpdated: wsLastUpdated } = useOrderUpdates(
     orderId,
     fetchOrder
   );
 
+  // WebSocket Hook for Delivery Partner Live GPS Tracking
+  const {
+    coordinates: deliveryCoords,
+    lastUpdated: locationLastUpdated,
+    isTracking: isLocationTracking,
+  } = useDeliveryTracking(orderId, {
+    onResync: fetchOrder,
+  });
+
   const displayStatus = liveStatus || order?.status || 'PENDING';
-  const lastUpdated = liveStatus ? wsLastUpdated : restLastUpdated;
+  const lastUpdated = liveStatus ? wsLastUpdated : (locationLastUpdated || restLastUpdated);
 
   // Early loading / error states
   if (isLoading) {
@@ -262,6 +274,27 @@ export default function OrderTrackingPage() {
                 <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" />
                 <span className="text-xs font-bold text-slate-900">{order.shopName}</span>
               </div>
+
+              {/* Live Coordinates Indicator */}
+              {deliveryCoords && (
+                <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-md border border-slate-200/80 flex items-center justify-between text-xs z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
+                    </span>
+                    <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Navigation className="w-3.5 h-3.5 text-emerald-600" />
+                      Live Location: {deliveryCoords.lat.toFixed(4)}, {deliveryCoords.lng.toFixed(4)}
+                    </span>
+                  </div>
+                  {locationLastUpdated && (
+                    <span className="text-slate-500 text-[11px] font-medium">
+                      Updated {locationLastUpdated.toLocaleTimeString()}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Delivery Partner */}
@@ -274,11 +307,23 @@ export default function OrderTrackingPage() {
                   className="object-cover"
                   sizes="56px"
                 />
-                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-[#22c55e] rounded-full border-2 border-white" />
+                <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${isLocationTracking ? 'bg-[#22c55e]' : 'bg-slate-400'} rounded-full border-2 border-white`} />
               </div>
               <div className="flex-grow">
-                <p className="text-base md:text-lg font-bold text-slate-900">Rahul S.</p>
-                <p className="text-xs md:text-sm text-slate-500">Delivery partner is on the way</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-base md:text-lg font-bold text-slate-900">Rahul S.</p>
+                  {isLocationTracking && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      GPS Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs md:text-sm text-slate-500">
+                  {deliveryCoords
+                    ? `Live coordinates: ${deliveryCoords.lat.toFixed(4)}, ${deliveryCoords.lng.toFixed(4)}`
+                    : 'Delivery partner is on the way'}
+                </p>
               </div>
               <a
                 href="tel:+919876543210"

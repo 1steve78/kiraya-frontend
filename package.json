@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "simulator": "node scripts/gps-simulator.mjs"
   },
   "dependencies": {
     "@stomp/stompjs": "^7.3.0",

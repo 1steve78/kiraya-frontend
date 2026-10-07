@@ -55,12 +55,21 @@ export interface DeliveryStatusChangedEvent extends RealtimeEvent {
   };
 }
 
+export interface DeliveryLocationUpdatedEvent {
+  type: 'DELIVERY_LOCATION_UPDATED';
+  deliveryId: string | number;
+  lat: number;
+  lng: number;
+  timestamp: string;
+}
+
 export type RealtimeEventType =
   | 'NEW_ORDER'
   | 'ORDER_STATUS_CHANGED'
   | 'ORDER_ASSIGNED'
   | 'ORDER_CANCELLED'
-  | 'DELIVERY_STATUS_CHANGED';
+  | 'DELIVERY_STATUS_CHANGED'
+  | 'DELIVERY_LOCATION_UPDATED';
 
 // Discriminated union of all real-time events in the platform
 export type ShopRealtimeEvent =
@@ -68,4 +77,5 @@ export type ShopRealtimeEvent =
   | OrderStatusChangedEvent
   | OrderAssignedEvent
   | OrderCancelledEvent
-  | DeliveryStatusChangedEvent;
+  | DeliveryStatusChangedEvent
+  | DeliveryLocationUpdatedEvent;
