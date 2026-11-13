@@ -1,13 +1,12 @@
 // app/orders/[orderId]/page.tsx
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import {
   Clock,
-  Phone,
   Bell,
   Settings,
   Home,
@@ -16,8 +15,7 @@ import {
   User,
   AlertCircle,
   RefreshCw,
-  MapPin,
-  Navigation,
+  Sparkles,
 } from 'lucide-react';
 import { ordersApi } from '@/lib/api/orders';
 import { useOrderUpdates } from '@/hooks/useOrderUpdates';
@@ -25,6 +23,21 @@ import { useDeliveryTracking } from '@/hooks/useDeliveryTracking';
 import { Order } from '@/types/order';
 import { OrderTimeline } from '@/components/orders/OrderTimeline';
 import { OrderItems } from '@/components/orders/OrderItems';
+import { DeliveryInfoPanel } from '@/components/tracking/DeliveryInfoPanel';
+
+// Dynamically load Mapbox GL component with SSR disabled
+const DeliveryMap = dynamic(
+  () => import('@/components/tracking/DeliveryMap').then((mod) => mod.DeliveryMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[360px] md:h-[440px] rounded-3xl bg-slate-100 animate-pulse flex flex-col items-center justify-center text-slate-400 gap-2 border border-slate-200">
+        <div className="w-9 h-9 border-3 border-emerald-300 border-t-[#006e2f] rounded-full animate-spin" />
+        <span className="text-xs font-semibold text-slate-600">Initializing Live Moving Map...</span>
+      </div>
+    ),
+  }
+);
 
 export default function OrderTrackingPage() {
   const params = useParams();
@@ -85,17 +98,133 @@ export default function OrderTrackingPage() {
     fetchOrder
   );
 
-  // WebSocket Hook for Delivery Partner Live GPS Tracking
+  // WebSocket Hook for Delivery Partner Live GPS Tracking & Dynamic ETA
   const {
     coordinates: deliveryCoords,
     lastUpdated: locationLastUpdated,
     isTracking: isLocationTracking,
+    etaMinutes,
+    estimatedArrival,
+    etaLastUpdated,
+    isEtaStale,
   } = useDeliveryTracking(orderId, {
     onResync: fetchOrder,
   });
 
   const displayStatus = liveStatus || order?.status || 'PENDING';
   const lastUpdated = liveStatus ? wsLastUpdated : (locationLastUpdated || restLastUpdated);
+
+  // Delivery Coordinates setup (Pickup & Destination matching simulator defaults)
+  const pickupLocation = useMemo(
+    () => ({
+      lat: 12.9716,
+      lng: 77.5946,
+      name: order?.shopName || 'Fresh Mart',
+      address: 'Indiranagar 100ft Road, Bengaluru',
+    }),
+    [order?.shopName]
+  );
+
+  const destinationLocation = useMemo(
+    () => ({
+      lat: 12.9785,
+      lng: 77.6060,
+      name: order?.customerName || 'Your Location',
+      address: 'Koramangala 4th Block, Bengaluru',
+    }),
+    [order?.customerName]
+  );
+
+  const partnerInfo = useMemo(
+    () => ({
+      name: 'Rahul S.',
+      phone: '+919876543210',
+      vehicle: 'Honda Activa',
+    }),
+    []
+  );
+
+  // Formatted arrival time string (e.g., "12:30 PM")
+  const formattedArrivalTime = useMemo(() => {
+    if (!estimatedArrival) return null;
+    try {
+      return new Intl.DateTimeFormat('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      }).format(estimatedArrival);
+    } catch {
+      return null;
+    }
+  }, [estimatedArrival]);
+
+  // Dynamic ETA display configuration matching Day 32 requirements
+  const etaDisplay = useMemo(() => {
+    if (displayStatus === 'DELIVERED') {
+      return {
+        value: '0',
+        unit: 'min',
+        headerText: 'Your order was delivered successfully',
+        subtitle: 'Package dropped off at your doorstep',
+        badge: 'Delivered',
+        badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      };
+    }
+
+    if (displayStatus === 'CANCELLED') {
+      return {
+        value: '--',
+        unit: '',
+        headerText: 'Your order was cancelled',
+        subtitle: 'Contact support if you need assistance',
+        badge: 'Cancelled',
+        badgeColor: 'bg-red-50 text-red-600 border-red-200',
+      };
+    }
+
+    if (etaMinutes !== null && etaMinutes !== undefined) {
+      const timeStr = formattedArrivalTime
+        ? `Estimated arrival: ${formattedArrivalTime}`
+        : 'Delivery partner is approaching';
+      return {
+        value: String(etaMinutes),
+        unit: etaMinutes === 1 ? 'minute' : 'minutes',
+        headerText: 'Your order is on the way · Live tracking',
+        subtitle: timeStr,
+        badge: isEtaStale ? 'Estimate (Stale)' : 'Live ETA',
+        badgeColor: isEtaStale
+          ? 'bg-amber-50 text-amber-700 border-amber-200'
+          : 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      };
+    }
+
+    // Default status-based fallback while waiting for initial ETA computation
+    const fallbackMins =
+      displayStatus === 'OUT_FOR_DELIVERY'
+        ? 12
+        : displayStatus === 'PICKED_UP'
+        ? 15
+        : displayStatus === 'PREPARING'
+        ? 25
+        : 35;
+
+    return {
+      value: String(fallbackMins),
+      unit: 'minutes',
+      headerText: 'Your order is being processed',
+      subtitle: 'Delivery partner is approaching · ETA updates automatically',
+      badge: 'Calculating...',
+      badgeColor: 'bg-slate-50 text-slate-600 border-slate-200',
+    };
+  }, [displayStatus, etaMinutes, formattedArrivalTime, isEtaStale]);
+
+  // Connection Indicator Details
+  const connectionDetails = {
+    CONNECTING: { color: 'bg-amber-400', text: 'Connecting live updates...' },
+    CONNECTED: { color: 'bg-emerald-500', text: 'Live WebSocket connected' },
+    RECONNECTING: { color: 'bg-amber-400', text: 'Reconnecting to live updates...' },
+    DISCONNECTED: { color: 'bg-red-400', text: 'Live updates offline' },
+  }[connectionState];
 
   // Early loading / error states
   if (isLoading) {
@@ -137,26 +266,6 @@ export default function OrderTrackingPage() {
       </div>
     );
   }
-
-  // Estimated Arrival calculation based on status
-  const etaDisplay =
-    displayStatus === 'DELIVERED'
-      ? { value: '0', unit: 'min', text: 'Delivered successfully' }
-      : displayStatus === 'CANCELLED'
-      ? { value: '--', unit: '', text: 'Order was cancelled' }
-      : displayStatus === 'OUT_FOR_DELIVERY'
-      ? { value: '12', unit: 'min', text: 'Arriving today at your location' }
-      : displayStatus === 'PREPARING'
-      ? { value: '25', unit: 'min', text: 'Packing fresh items' }
-      : { value: '35', unit: 'min', text: 'Estimated arrival time' };
-
-  // Connection Indicator Details
-  const connectionDetails = {
-    CONNECTING: { color: 'bg-amber-400', text: 'Connecting live updates...' },
-    CONNECTED: { color: 'bg-emerald-500', text: 'Live WebSocket connected' },
-    RECONNECTING: { color: 'bg-amber-400', text: 'Reconnecting to live updates...' },
-    DISCONNECTED: { color: 'bg-red-400', text: 'Live updates offline' },
-  }[connectionState];
 
   return (
     <div className="bg-[#f8f9ff] text-[#0b1c30] font-sans min-h-screen flex flex-col antialiased">
@@ -225,7 +334,7 @@ export default function OrderTrackingPage() {
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
               Order #{order.id}
             </h1>
-            <p className="text-sm md:text-base text-slate-500 mt-1">{etaDisplay.text}</p>
+            <p className="text-sm md:text-base text-slate-500 mt-1">{etaDisplay.headerText}</p>
           </div>
 
           <div className="inline-flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-full border border-slate-200 shadow-xs self-start sm:self-auto text-xs font-medium text-slate-700">
@@ -237,15 +346,25 @@ export default function OrderTrackingPage() {
 
         {/* 12-Column Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-          {/* Left Column (Col 7): ETA, Map, Delivery Driver */}
+          {/* Left Column (Col 7): Dynamic ETA, Live Mapbox Map, Delivery Info Panel */}
           <div className="lg:col-span-7 flex flex-col gap-6">
-            {/* ETA Widget */}
-            <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/80 flex items-center justify-between">
+            {/* Dynamic ETA Widget */}
+            <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/80 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Estimated Arrival
-                </p>
-                <div className="text-4xl lg:text-5xl font-extrabold text-[#22c55e] flex items-baseline gap-2">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    Estimated Arrival
+                  </p>
+                  <span
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${etaDisplay.badgeColor}`}
+                  >
+                    {!isEtaStale && displayStatus !== 'DELIVERED' && displayStatus !== 'CANCELLED' && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    )}
+                    {etaDisplay.badge}
+                  </span>
+                </div>
+                <div className="text-4xl lg:text-5xl font-extrabold text-[#006e2f] flex items-baseline gap-2">
                   <span>{etaDisplay.value}</span>
                   {etaDisplay.unit && (
                     <span className="text-xl lg:text-2xl font-bold text-slate-900">
@@ -253,86 +372,51 @@ export default function OrderTrackingPage() {
                     </span>
                   )}
                 </div>
-              </div>
-              <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center text-[#22c55e]">
-                <Clock className="w-8 h-8 text-[#22c55e]" />
-              </div>
-            </div>
-
-            {/* Map Visualization */}
-            <div className="bg-white rounded-3xl shadow-xs border border-slate-200/80 overflow-hidden h-[300px] md:h-[400px] relative">
-              <Image
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCyuX6tscy23plZob0sGA9YmEyT9j1ttBdtaKzMlYzQn3UvwfrGEyVrbBpfu2Yuel0fSZJSzCyp044I58KAwdZ4wWWJ7wUOy1DA9YPTkxhhzCY5QeF-HvWAEjE_LlF9ivs9grcUEmCYKUw8oOhWc6efevUr6U90JCE5bD0JE4-29_Q_lTeTCvw_ClWPdCRdSeK5B7C_XqBwd6XqCdHFOalhjiWRi1pLLXJy8WDcagMf0tCzqOBY1L63hg"
-                alt="Delivery live route map"
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 60vw"
-                priority
-              />
-              {/* Map Overlay Chip */}
-              <div className="absolute top-4 left-4 bg-white/95 backdrop-blur-sm rounded-full px-4 py-2 shadow-sm border border-slate-200 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" />
-                <span className="text-xs font-bold text-slate-900">{order.shopName}</span>
-              </div>
-
-              {/* Live Coordinates Indicator */}
-              {deliveryCoords && (
-                <div className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-md border border-slate-200/80 flex items-center justify-between text-xs z-10">
-                  <div className="flex items-center gap-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-600"></span>
-                    </span>
-                    <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                      <Navigation className="w-3.5 h-3.5 text-emerald-600" />
-                      Live Location: {deliveryCoords.lat.toFixed(4)}, {deliveryCoords.lng.toFixed(4)}
-                    </span>
-                  </div>
-                  {locationLastUpdated && (
-                    <span className="text-slate-500 text-[11px] font-medium">
-                      Updated {locationLastUpdated.toLocaleTimeString()}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mt-1.5 text-xs text-slate-500">
+                  <p className="font-medium text-slate-700">{etaDisplay.subtitle}</p>
+                  {etaLastUpdated && displayStatus !== 'DELIVERED' && (
+                    <span className="hidden sm:inline text-slate-300">·</span>
+                  )}
+                  {etaLastUpdated && displayStatus !== 'DELIVERED' && (
+                    <span className="text-[11px] text-slate-400">
+                      ETA updates automatically
                     </span>
                   )}
                 </div>
-              )}
+              </div>
+              <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center text-[#006e2f] shrink-0 self-start sm:self-auto shadow-xs border border-emerald-100">
+                <Clock className="w-8 h-8 text-[#006e2f]" />
+              </div>
             </div>
 
-            {/* Delivery Partner */}
-            <div className="bg-white rounded-3xl p-6 shadow-xs border border-slate-200/80 flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-slate-100 shrink-0 relative">
-                <Image
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXMKGblyhNmD5A_3TS_49f6NwwzVE8gZYrMGuonI4Pdx_j4QMK3dOtozz7fJ7kdcMH8nxt2vQchNekkZvWbAFgXSNf_6Y8A23iNaPAbVUhITlHXxB2oZ53pSsuk2qYyiw76mZIbwBCIXJ2ZeDQS7DM6KFaQdCLsAIhIPoAER4CDfZp0Qfnmjrubbs-3D95qPgUHM6RZrfE4s2pQDK052BptKPgjw8kUffmzCBpcOttL-ACPKgQnmPh9Q"
-                  alt="Delivery partner Rahul S."
-                  fill
-                  className="object-cover"
-                  sizes="56px"
-                />
-                <div className={`absolute bottom-0 right-0 w-3.5 h-3.5 ${isLocationTracking ? 'bg-[#22c55e]' : 'bg-slate-400'} rounded-full border-2 border-white`} />
-              </div>
-              <div className="flex-grow">
-                <div className="flex items-center gap-2">
-                  <p className="text-base md:text-lg font-bold text-slate-900">Rahul S.</p>
-                  {isLocationTracking && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      GPS Active
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs md:text-sm text-slate-500">
-                  {deliveryCoords
-                    ? `Live coordinates: ${deliveryCoords.lat.toFixed(4)}, ${deliveryCoords.lng.toFixed(4)}`
-                    : 'Delivery partner is on the way'}
-                </p>
-              </div>
-              <a
-                href="tel:+919876543210"
-                className="w-11 h-11 rounded-full bg-emerald-50 text-[#006e2f] flex items-center justify-center hover:bg-emerald-100 transition-colors shrink-0 shadow-xs active:scale-95"
-                aria-label="Call delivery partner"
-              >
-                <Phone className="w-5 h-5" />
-              </a>
-            </div>
+            {/* Live Mapbox Moving Map */}
+            <DeliveryMap
+              deliveryId={order.id}
+              pickup={pickupLocation}
+              destination={destinationLocation}
+              partnerInfo={partnerInfo}
+              partnerLocation={
+                deliveryCoords
+                  ? {
+                      lat: deliveryCoords.lat,
+                      lng: deliveryCoords.lng,
+                      timestamp: locationLastUpdated || Date.now(),
+                    }
+                  : null
+              }
+              status={displayStatus}
+              connectionState={connectionState}
+              className="h-[360px] md:h-[440px]"
+            />
+
+            {/* Delivery Information Panel */}
+            <DeliveryInfoPanel
+              status={displayStatus}
+              pickup={pickupLocation}
+              destination={destinationLocation}
+              partnerInfo={partnerInfo}
+              isLiveTracking={isLocationTracking}
+            />
           </div>
 
           {/* Right Column (Col 5): Live Status & Order Summary */}

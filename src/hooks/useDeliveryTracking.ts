@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useWebSocket, ConnectionState } from '@/lib/websocket/WebSocketContext';
 import { ordersApi } from '@/lib/api/orders';
-import { DeliveryLocationUpdatedEvent } from '@/types/realtime';
+import { DeliveryLocationUpdatedEvent, EtaChangedEvent } from '@/types/realtime';
 
 export interface LocationCoordinates {
   lat: number;
@@ -12,6 +12,7 @@ export interface LocationCoordinates {
 
 export interface UseDeliveryTrackingOptions {
   onLocationUpdate?: (coords: LocationCoordinates) => void;
+  onEtaUpdate?: (eta: { etaMinutes: number; estimatedArrival: Date }) => void;
   onResync?: () => void;
 }
 
@@ -22,18 +23,22 @@ export interface DeliveryTrackingState {
   isTracking: boolean;
   error: string | null;
   resync: () => Promise<void>;
+  etaMinutes: number | null;
+  estimatedArrival: Date | null;
+  etaLastUpdated: Date | null;
+  isEtaStale: boolean;
 }
 
 /**
- * Custom hook for tracking delivery partner coordinates in real-time.
+ * Custom hook for tracking delivery partner coordinates and dynamic ETA in real-time.
  * 
  * Features:
- * 1. Subscribes to the authorized delivery location topic (/topic/delivery/{id}/location).
- * 2. Parses incoming DELIVERY_LOCATION_UPDATED events.
- * 3. Stores latest coordinates in React state.
- * 4. Ignores out-of-order/delayed GPS updates (older timestamps).
+ * 1. Subscribes to live GPS coordinates (/topic/delivery/{id}/location and /user/queue/delivery-location).
+ * 2. Subscribes to dynamic ETA updates (/topic/delivery/{id}/eta and /user/queue/delivery-eta).
+ * 3. Handles ETA_CHANGED events smoothly without jitter.
+ * 4. Tracks staleness indicator when updates haven't arrived.
  * 5. Cleans up / unsubscribes on unmount or deliveryId change.
- * 6. Fetches current state & location via REST on connect and reconnection.
+ * 6. Fetches current state, location snapshot, and ETA snapshot via REST on connect and reconnection.
  */
 export function useDeliveryTracking(
   deliveryId: number | string | null | undefined,
@@ -42,6 +47,9 @@ export function useDeliveryTracking(
   const { client, connectionState } = useWebSocket();
   const [coordinates, setCoordinates] = useState<LocationCoordinates | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [etaMinutes, setEtaMinutes] = useState<number | null>(null);
+  const [estimatedArrival, setEstimatedArrival] = useState<Date | null>(null);
+  const [etaLastUpdated, setEtaLastUpdated] = useState<Date | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Clean numeric/string ID (strips 'delivery-' prefix if present)
@@ -61,10 +69,13 @@ export function useDeliveryTracking(
     lastTimestampRef.current = null;
     setCoordinates(null);
     setLastUpdated(null);
+    setEtaMinutes(null);
+    setEstimatedArrival(null);
+    setEtaLastUpdated(null);
     setError(null);
   }, [cleanId]);
 
-  // REST Resynchronization function: fetches latest delivery state and location snapshot
+  // REST Resynchronization function: fetches latest delivery state, location snapshot, and ETA snapshot
   const resync = useCallback(async () => {
     if (!cleanId) return;
 
@@ -102,6 +113,25 @@ export function useDeliveryTracking(
           }
         }
       }
+
+      // 3. Fetch latest ETA snapshot via REST
+      const etaSnapshot = await ordersApi.getDeliveryEta(cleanId);
+      if (etaSnapshot && typeof etaSnapshot.etaMinutes === 'number') {
+        setEtaMinutes(etaSnapshot.etaMinutes);
+        if (etaSnapshot.estimatedArrival) {
+          setEstimatedArrival(new Date(etaSnapshot.estimatedArrival));
+        }
+        setEtaLastUpdated(
+          etaSnapshot.calculatedAt ? new Date(etaSnapshot.calculatedAt) : new Date()
+        );
+        if (optionsRef.current?.onEtaUpdate && etaSnapshot.estimatedArrival) {
+          optionsRef.current.onEtaUpdate({
+            etaMinutes: etaSnapshot.etaMinutes,
+            estimatedArrival: new Date(etaSnapshot.estimatedArrival),
+          });
+        }
+      }
+
       setError(null);
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : 'Failed to synchronize delivery state';
@@ -116,17 +146,17 @@ export function useDeliveryTracking(
     }
   }, [connectionState, cleanId, resync]);
 
-  // WebSocket Subscription for live location updates
+  // WebSocket Subscription for live location & ETA updates
   useEffect(() => {
     if (!client || connectionState !== 'CONNECTED' || !cleanId) {
       return;
     }
 
-    const handleMessage = (body: string) => {
+    // Handler for live GPS location updates
+    const handleLocationMessage = (body: string) => {
       try {
         const event: DeliveryLocationUpdatedEvent = JSON.parse(body);
 
-        // Accept DELIVERY_LOCATION_UPDATED events or any event containing lat & lng
         const isLocationEvent =
           event.type === 'DELIVERY_LOCATION_UPDATED' ||
           (event.lat !== undefined && event.lng !== undefined);
@@ -135,7 +165,6 @@ export function useDeliveryTracking(
           return;
         }
 
-        // Verify delivery ID match if present in the event
         if (event.deliveryId) {
           const eventDeliveryId = String(event.deliveryId).replace(/^delivery-/, '').trim();
           if (eventDeliveryId !== cleanId) {
@@ -146,12 +175,10 @@ export function useDeliveryTracking(
         const lat = Number(event.lat);
         const lng = Number(event.lng);
 
-        // Coordinate sanity checks
         if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
           return;
         }
 
-        // Out-of-order check: ignore older timestamps
         const eventTimestamp = event.timestamp ? new Date(event.timestamp).getTime() : Date.now();
         if (lastTimestampRef.current !== null && eventTimestamp <= lastTimestampRef.current) {
           return;
@@ -166,26 +193,74 @@ export function useDeliveryTracking(
           optionsRef.current.onLocationUpdate(newCoords);
         }
       } catch {
-        // Non-JSON or corrupt WebSocket payload — ignore
+        // Non-JSON or corrupt payload
       }
     };
 
-    // 1. Subscribe to authorized delivery topic
-    const topicSub = client.subscribe(`/topic/delivery/${cleanId}/location`, (message) => {
-      handleMessage(message.body);
+    // Handler for dynamic ETA updates
+    const handleEtaMessage = (body: string) => {
+      try {
+        const event: EtaChangedEvent = JSON.parse(body);
+
+        if (event.type === 'ETA_CHANGED' || event.etaMinutes !== undefined) {
+          if (event.deliveryId) {
+            const eventDeliveryId = String(event.deliveryId).replace(/^delivery-/, '').trim();
+            if (eventDeliveryId !== cleanId) {
+              return;
+            }
+          }
+
+          const minutes = Number(event.etaMinutes);
+          if (!isNaN(minutes)) {
+            setEtaMinutes(minutes);
+            const arrival = event.estimatedArrival ? new Date(event.estimatedArrival) : null;
+            setEstimatedArrival(arrival);
+            const now = event.calculatedAt ? new Date(event.calculatedAt) : new Date();
+            setEtaLastUpdated(now);
+
+            if (optionsRef.current?.onEtaUpdate && arrival) {
+              optionsRef.current.onEtaUpdate({
+                etaMinutes: minutes,
+                estimatedArrival: arrival,
+              });
+            }
+          }
+        }
+      } catch {
+        // Non-JSON or corrupt payload
+      }
+    };
+
+    // 1. Subscribe to authorized delivery location topic & user queue
+    const locationTopicSub = client.subscribe(`/topic/delivery/${cleanId}/location`, (m) => {
+      handleLocationMessage(m.body);
+    });
+    const locationQueueSub = client.subscribe('/user/queue/delivery-location', (m) => {
+      handleLocationMessage(m.body);
     });
 
-    // 2. Subscribe to authorized private user queue
-    const queueSub = client.subscribe('/user/queue/delivery-location', (message) => {
-      handleMessage(message.body);
+    // 2. Subscribe to authorized delivery ETA topic & user queue
+    const etaTopicSub = client.subscribe(`/topic/delivery/${cleanId}/eta`, (m) => {
+      handleEtaMessage(m.body);
+    });
+    const etaQueueSub = client.subscribe('/user/queue/delivery-eta', (m) => {
+      handleEtaMessage(m.body);
     });
 
-    // Clean up subscriptions when component unmounts or deliveryId changes
     return () => {
-      topicSub.unsubscribe();
-      queueSub.unsubscribe();
+      locationTopicSub.unsubscribe();
+      locationQueueSub.unsubscribe();
+      etaTopicSub.unsubscribe();
+      etaQueueSub.unsubscribe();
     };
   }, [client, connectionState, cleanId]);
+
+  // Determine if ETA is stale (e.g. no updates for > 90 seconds while active)
+  const isEtaStale = Boolean(
+    etaLastUpdated &&
+      Date.now() - etaLastUpdated.getTime() > 90000 &&
+      connectionState === 'CONNECTED'
+  );
 
   return {
     coordinates,
@@ -194,5 +269,9 @@ export function useDeliveryTracking(
     isTracking: connectionState === 'CONNECTED' && coordinates !== null,
     error,
     resync,
+    etaMinutes,
+    estimatedArrival,
+    etaLastUpdated,
+    isEtaStale,
   };
 }

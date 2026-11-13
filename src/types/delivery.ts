@@ -20,3 +20,13 @@ export interface Delivery {
   totalAmount?: number;
   distanceKm?: number;
 }
+
+export interface EtaResponse {
+  deliveryId: number;
+  etaMinutes: number;
+  estimatedArrival: string;
+  calculatedAt?: string;
+  remainingDistanceMeters?: number;
+  remainingDurationSeconds?: number;
+  status?: string;
+}

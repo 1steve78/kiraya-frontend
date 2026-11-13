@@ -13,12 +13,14 @@
     "@stomp/stompjs": "^7.3.0",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.34.0",
+    "mapbox-gl": "^3.34.2",
     "next": "16.3.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/mapbox-gl": "^3.4.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

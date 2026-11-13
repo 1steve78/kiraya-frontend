@@ -63,13 +63,22 @@ export interface DeliveryLocationUpdatedEvent {
   timestamp: string;
 }
 
+export interface EtaChangedEvent {
+  type: 'ETA_CHANGED';
+  deliveryId: string | number;
+  etaMinutes: number;
+  estimatedArrival: string;
+  calculatedAt?: string;
+}
+
 export type RealtimeEventType =
   | 'NEW_ORDER'
   | 'ORDER_STATUS_CHANGED'
   | 'ORDER_ASSIGNED'
   | 'ORDER_CANCELLED'
   | 'DELIVERY_STATUS_CHANGED'
-  | 'DELIVERY_LOCATION_UPDATED';
+  | 'DELIVERY_LOCATION_UPDATED'
+  | 'ETA_CHANGED';
 
 // Discriminated union of all real-time events in the platform
 export type ShopRealtimeEvent =
@@ -78,4 +87,5 @@ export type ShopRealtimeEvent =
   | OrderAssignedEvent
   | OrderCancelledEvent
   | DeliveryStatusChangedEvent
-  | DeliveryLocationUpdatedEvent;
+  | DeliveryLocationUpdatedEvent
+  | EtaChangedEvent;

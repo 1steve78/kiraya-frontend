@@ -1,6 +1,7 @@
 // lib/api/orders.ts
 import { apiClient } from './client';
 import { Order, OrderStatus } from '@/types/order';
+import { EtaResponse } from '@/types/delivery';
 
 export const ordersApi = {
   /**
@@ -43,6 +44,18 @@ export const ordersApi = {
         lng: number;
         timestamp?: string;
       }>(`/orders/${orderId}/location`);
+      return res || null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Fetches the current estimated time of arrival (ETA) snapshot for an order.
+   */
+  async getDeliveryEta(orderId: string | number): Promise<EtaResponse | null> {
+    try {
+      const res = await apiClient.get<EtaResponse>(`/orders/${orderId}/eta`);
       return res || null;
     } catch {
       return null;
